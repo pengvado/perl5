@@ -289,6 +289,9 @@ are in the character. */
  * amount.  This is a clearer name in such situations */
 #define UTF_ACCUMULATION_SHIFT  UTF_CONTINUATION_BYTE_INFO_BITS
 
+/* A synonym that in places makes more sense */
+#define UTF_CONTINUATION_SHIFT	UTF_ACCUMULATION_SHIFT
+
 /* 2**info_bits - 1.  This masks out all but the bits that carry real
  * information in a continuation byte.  This turns out to be 0x3F in UTF-8,
  * 0x1F in UTF-EBCDIC. */
