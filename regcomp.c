@@ -1244,6 +1244,28 @@ static const scan_data_t zero_scan_data = {
 #define EXPERIMENTAL_INPLACESCAN
 #endif /*PERL_ENABLE_EXPERIMENTAL_REGEX_OPTIMISATIONS*/
 
+STATIC void
+S_populate_invlist_from_bitmap(pTHX_ const U8 * bitmap, const Size_t bitmap_len, SV * invlist, const UV adjustment)
+{
+    Size_t i;
+
+    for (i = 0; i < bitmap_len; i++) {
+        if (BITMAP_TEST(bitmap, i)) {
+            int start = i++;
+
+            /* Save a little work by adding a range all at once instead of bit
+             * by bit */
+            for (;
+                    i < bitmap_len && BITMAP_TEST(bitmap, i);
+                    i++)
+            { /* empty */ }
+            invlist = _add_range_to_invlist(invlist,
+                                            start + adjustment,
+                                            i + adjustment - 1);
+        }
+    }
+}
+
 #ifdef DEBUGGING
 int
 Perl_re_printf(pTHX_ const char *fmt, ...)
@@ -17713,6 +17735,25 @@ S_find_first_differing_byte_pos(const U8 * s1, const U8 * s2, const Size_t max)
     return s1 - start;
 }
 
+STATIC void
+S_populate_bitmap_from_invlist(SV * invlist, const UV adjustment, const U8 * bitmap, const Size_t len)
+{
+    UV start, end;
+
+    invlist_iterinit(invlist);
+    Zero(bitmap, len, U8);
+    while (invlist_iternext(invlist, &start, &end)) {
+        UV i;
+
+        for (i = start; i <= end; i++) {
+            UV adjusted = i - adjustment;
+
+            assert(i >= adjustment);
+            BITMAP_BYTE(bitmap, adjusted) |= BITMAP_BIT(adjusted);
+        }
+    }
+    invlist_iterfinish(invlist);
+}
 
 STATIC AV *
 S_add_multi_match(pTHX_ AV* multi_char_matches, SV* multi_string, const STRLEN cp_count)
@@ -20445,7 +20486,7 @@ S_optimize_regclass(pTHX_
     }
 
     /* If didn't find an optimization and there is no need for a bitmap,
-     * optimize to indicate that */
+     * of the lowe code points, optimize to indicate that */
     if (     lowest_cp >= NUM_ANYOF_CODE_POINTS
         && ! LOC
         && ! upper_latin1_only_utf8_matches
@@ -20491,7 +20532,22 @@ S_optimize_regclass(pTHX_
                     /* No need to convert to I8 for EBCDIC as this is an exact
                      * match */
                     *anyof_flags = low_utf8[0];
-                    op = ANYOFHb;
+
+                    if (high_len == 2) {
+                        op = ANYOFHbbm;
+                        *ret = REGNODE_GUTS(pRExC_state, op, sizeof(struct regnode_bbm));
+                        FILL_NODE(*ret, op);
+                        S_populate_bitmap_from_invlist(
+                            cp_list,
+                            lowest_cp - ((low_utf8[1] & UTF_CONTINUATION_MASK)),
+                            ((struct regnode_bbm *) ret)->bitmap,
+                            REGNODE_BM_BITMAP_LEN);
+                        RExC_emit += NODE_SZ_STR(REGNODE_p(*ret));
+                        return op;
+                    }
+                    else {
+                        op = ANYOFHb;
+                    }
                 }
                 else {
                     op = ANYOFHs;

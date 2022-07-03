@@ -171,7 +171,19 @@ struct regnode_2 {
     U16 arg2;
 };
 
-#define ANYOF_BITMAP_SIZE	(NUM_ANYOF_CODE_POINTS / 8)   /* 8 bits/Byte */
+#define REGNODE_BM_BITMAP_LEN                                                   \
+                      /* 6 info bits requires 64 bits; 5 => 32 */               \
+                    ((1 << (UTF_CONTINUATION_BYTE_INFO_BITS - 1)) / CHARBITS)
+
+/* Used for matchings two-byte UTF-8 characters whose first byte is the same */
+struct regnode_bbm {
+    U8	first_byte;
+    U8  type;
+    U16 next_off;
+    U8 bitmap[REGNODE_BM_BITMAP_LEN];
+};
+
+#define ANYOF_BITMAP_SIZE	(NUM_ANYOF_CODE_POINTS / CHARBITS)
 
 /* Note that these form structs which are supersets of the next smaller one, by
  * appending fields.  Alignment problems can occur if one of those optional
@@ -689,9 +701,13 @@ struct regnode_ssc {
 
 /* Utility macros for the bitmap and classes of ANYOF */
 
+#define BITMAP_BYTE(p, c)	(( (U8*) (p)) [ ( ( (UV) (c)) >> 3) ] )
+#define BITMAP_BIT(c)	        (1U << ((c) & 7))
+#define BITMAP_TEST(p, c)	(BITMAP_BYTE(p, c) & BITMAP_BIT((U8)(c)))
+
 #define ANYOF_FLAGS(p)		((p)->flags)
 
-#define ANYOF_BIT(c)		(1U << ((c) & 7))
+#define ANYOF_BIT(c)		BITMAP_BIT(c)
 
 #define ANYOF_POSIXL_BITMAP(p)  (((regnode_charclass_posixl*) (p))->classflags)
 
@@ -974,10 +990,6 @@ typedef struct _reg_ac_data reg_ac_data;
 
 #define IS_ANYOF_TRIE(op) ((op)==TRIEC || (op)==AHOCORASICKC)
 #define IS_TRIE_AC(op) ((op)>=AHOCORASICK)
-
-
-#define BITMAP_BYTE(p, c)	(( (U8*) p) [ ( ( (UV) (c)) >> 3) ] )
-#define BITMAP_TEST(p, c)	(BITMAP_BYTE(p, c) &   ANYOF_BIT((U8)c))
 
 /* these defines assume uniquecharcount is the correct variable, and state may be evaluated twice */
 #define TRIE_NODENUM(state) (((state)-1)/(trie->uniquecharcount)+1)
