@@ -1237,6 +1237,10 @@ point's representation.
  * retained solely for backwards compatibility */
 #define IS_UTF8_CHAR(p, n)      (isUTF8_CHAR(p, (p) + (n)) == n)
 
+/* How many bits does the largest invariant require.  It's 7 for ASCII
+ * platforms, 8 for EBCDIC; here an 8 bit value is tested to be invariant */
+#define UTF_INVARIANT_BITS  (7 + OFFUNI_IS_INVARIANT(1U << 7))
+
 #endif /* PERL_UTF8_H_ */
 
 /*
