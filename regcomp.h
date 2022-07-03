@@ -173,7 +173,7 @@ struct regnode_2 {
 
 #define REGNODE_BM_BITMAP_LEN                                                   \
                       /* 6 info bits requires 64 bits; 5 => 32 */               \
-                    ((1 << (UTF_CONTINUATION_BYTE_INFO_BITS - 1)) / CHARBITS)
+                    ((1 << (UTF_CONTINUATION_BYTE_INFO_BITS /*- 1*/)) / CHARBITS)
 
 /* Used for matchings two-byte UTF-8 characters whose first byte is the same */
 struct regnode_bbm {
@@ -759,7 +759,7 @@ struct regnode_ssc {
 #define ANYOF_BITMAP_BYTE(p, c)	BITMAP_BYTE(ANYOF_BITMAP(p), c)
 #define ANYOF_BITMAP_SET(p, c)	(ANYOF_BITMAP_BYTE(p, c) |=  ANYOF_BIT(c))
 #define ANYOF_BITMAP_CLEAR(p,c)	(ANYOF_BITMAP_BYTE(p, c) &= ~ANYOF_BIT(c))
-#define ANYOF_BITMAP_TEST(p, c)	cBOOL(ANYOF_BITMAP_BYTE(p, c) &   ANYOF_BIT(c))
+#define ANYOF_BITMAP_TEST(p, c)	cBOOL(ANYOF_BITMAP_BYTE(p, c) & ANYOF_BIT(c))
 
 #define ANYOF_BITMAP_SETALL(p)		\
         memset (ANYOF_BITMAP(p), 255, ANYOF_BITMAP_SIZE)

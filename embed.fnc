@@ -2210,6 +2210,17 @@ ES	|SSize_t|study_chunk	|NN RExC_state_t *pRExC_state \
 				|U32 flags|U32 depth|bool was_mutate_ok
 ES	|void	|rck_elide_nothing|NN regnode *node
 ESR	|SV *	|get_ANYOFM_contents|NN const regnode * n
+ESR	|SV *	|get_ANYOFHbbm_contents|NN const regnode * n
+ES	|void	|populate_bitmap_from_invlist				    \
+				|NN SV * invlist			    \
+				|const UV adjustment			    \
+				|NN const U8 * bitmap			    \
+				|const Size_t len
+ES	|void	|populate_invlist_from_bitmap				    \
+				|NN const U8 * bitmap			    \
+				|const Size_t bitmap_len		    \
+				|NN SV ** invlist			    \
+				|const UV adjustment
 ESRT	|U32	|add_data	|NN RExC_state_t* const pRExC_state \
 				|NN const char* const s|const U32 n
 frS	|void	|re_croak	|bool utf8|NN const char* pat|...

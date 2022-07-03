@@ -1016,6 +1016,7 @@
 #define edit_distance		S_edit_distance
 #define execute_wildcard(a,b,c,d,e,f,g)	S_execute_wildcard(aTHX_ a,b,c,d,e,f,g)
 #define find_first_differing_byte_pos	S_find_first_differing_byte_pos
+#define get_ANYOFHbbm_contents(a)	S_get_ANYOFHbbm_contents(aTHX_ a)
 #define get_ANYOFM_contents(a)	S_get_ANYOFM_contents(aTHX_ a)
 #define get_ANYOF_cp_list_for_ssc(a,b)	S_get_ANYOF_cp_list_for_ssc(aTHX_ a,b)
 #define get_quantifier_value(a,b,c)	S_get_quantifier_value(aTHX_ a,b,c)
@@ -1038,6 +1039,8 @@
 #define parse_lparen_question_flags(a)	S_parse_lparen_question_flags(aTHX_ a)
 #define parse_uniprop_string(a,b,c,d,e,f,g,h,i,j)	S_parse_uniprop_string(aTHX_ a,b,c,d,e,f,g,h,i,j)
 #define populate_ANYOF_from_invlist(a,b)	S_populate_ANYOF_from_invlist(aTHX_ a,b)
+#define populate_bitmap_from_invlist(a,b,c,d)	S_populate_bitmap_from_invlist(aTHX_ a,b,c,d)
+#define populate_invlist_from_bitmap(a,b,c,d)	S_populate_invlist_from_bitmap(aTHX_ a,b,c,d)
 #define rck_elide_nothing(a)	S_rck_elide_nothing(aTHX_ a)
 #define reg(a,b,c,d)		S_reg(aTHX_ a,b,c,d)
 #define reg2Lanode(a,b,c,d)	S_reg2Lanode(aTHX_ a,b,c,d)

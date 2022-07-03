@@ -1245,8 +1245,32 @@ static const scan_data_t zero_scan_data = {
 #endif /*PERL_ENABLE_EXPERIMENTAL_REGEX_OPTIMISATIONS*/
 
 STATIC void
-S_populate_invlist_from_bitmap(pTHX_ const U8 * bitmap, const Size_t bitmap_len, SV * invlist, const UV adjustment)
+S_populate_bitmap_from_invlist(pTHX_ SV * invlist, const UV adjustment, const U8 * bitmap, const Size_t len)
 {
+    PERL_ARGS_ASSERT_POPULATE_BITMAP_FROM_INVLIST;
+
+    UV start, end;
+
+    invlist_iterinit(invlist);
+    Zero(bitmap, len, U8);
+    while (invlist_iternext(invlist, &start, &end)) {
+        UV i;
+
+        for (i = start; i <= end; i++) {
+            UV adjusted = i - adjustment;
+
+            assert(i >= adjustment);
+            BITMAP_BYTE(bitmap, adjusted) |= BITMAP_BIT(adjusted);
+        }
+    }
+    invlist_iterfinish(invlist);
+}
+
+STATIC void
+S_populate_invlist_from_bitmap(pTHX_ const U8 * bitmap, const Size_t bitmap_len, SV ** invlist, const UV adjustment)
+{
+    PERL_ARGS_ASSERT_POPULATE_INVLIST_FROM_BITMAP;
+
     Size_t i;
 
     for (i = 0; i < bitmap_len; i++) {
@@ -1259,7 +1283,7 @@ S_populate_invlist_from_bitmap(pTHX_ const U8 * bitmap, const Size_t bitmap_len,
                     i < bitmap_len && BITMAP_TEST(bitmap, i);
                     i++)
             { /* empty */ }
-            invlist = _add_range_to_invlist(invlist,
+            *invlist = _add_range_to_invlist(*invlist,
                                             start + adjustment,
                                             i + adjustment - 1);
         }
@@ -6161,6 +6185,21 @@ S_study_chunk(pTHX_
                                                           (regnode_charclass *) scan);
                     break;
 
+                case ANYOFHbbm:
+                  {
+                    SV* cp_list = get_ANYOFHbbm_contents(scan);
+
+                    if (flags & SCF_DO_STCLASS_OR) {
+                        ssc_union(data->start_class, cp_list, invert);
+                    }
+                    else if (flags & SCF_DO_STCLASS_AND) {
+                        ssc_intersection(data->start_class, cp_list, invert);
+                    }
+
+                    SvREFCNT_dec_NN(cp_list);
+                    break;
+                  }
+
                 case NANYOFM: /* NANYOFM already contains the inversion of the
                                  input ANYOF data, so, unlike things like
                                  NPOSIXA, don't change 'invert' to TRUE */
@@ -6179,6 +6218,7 @@ S_study_chunk(pTHX_
                     SvREFCNT_dec_NN(cp_list);
                     break;
                   }
+
 
                 case ANYOFR:
                 case ANYOFRb:
@@ -17735,26 +17775,6 @@ S_find_first_differing_byte_pos(const U8 * s1, const U8 * s2, const Size_t max)
     return s1 - start;
 }
 
-STATIC void
-S_populate_bitmap_from_invlist(SV * invlist, const UV adjustment, const U8 * bitmap, const Size_t len)
-{
-    UV start, end;
-
-    invlist_iterinit(invlist);
-    Zero(bitmap, len, U8);
-    while (invlist_iternext(invlist, &start, &end)) {
-        UV i;
-
-        for (i = start; i <= end; i++) {
-            UV adjusted = i - adjustment;
-
-            assert(i >= adjustment);
-            BITMAP_BYTE(bitmap, adjusted) |= BITMAP_BIT(adjusted);
-        }
-    }
-    invlist_iterfinish(invlist);
-}
-
 STATIC AV *
 S_add_multi_match(pTHX_ AV* multi_char_matches, SV* multi_string, const STRLEN cp_count)
 {
@@ -20535,14 +20555,15 @@ S_optimize_regclass(pTHX_
 
                     if (high_len == 2) {
                         op = ANYOFHbbm;
-                        *ret = REGNODE_GUTS(pRExC_state, op, sizeof(struct regnode_bbm));
+                        *ret = REGNODE_GUTS(pRExC_state, op, regarglen[op]);
                         FILL_NODE(*ret, op);
-                        S_populate_bitmap_from_invlist(
+                        ((struct regnode_bbm *) REGNODE_p(*ret))->first_byte = low_utf8[0],
+                        populate_bitmap_from_invlist(
                             cp_list,
                             lowest_cp - ((low_utf8[1] & UTF_CONTINUATION_MASK)),
-                            ((struct regnode_bbm *) ret)->bitmap,
+                            ((struct regnode_bbm *) REGNODE_p(*ret))->bitmap,
                             REGNODE_BM_BITMAP_LEN);
-                        RExC_emit += NODE_SZ_STR(REGNODE_p(*ret));
+                        RExC_emit += NODE_STEP_REGNODE + regarglen[op];
                         return op;
                     }
                     else {
@@ -21436,6 +21457,20 @@ S_get_ANYOFM_contents(pTHX_ const regnode * n) {
     return cp_list;
 }
 
+STATIC SV *
+S_get_ANYOFHbbm_contents(pTHX_ const regnode * n) {
+    PERL_ARGS_ASSERT_GET_ANYOFHBBM_CONTENTS;
+
+    SV * cp_list = NULL;
+    populate_invlist_from_bitmap(
+                  ((struct regnode_bbm *) n)->bitmap,
+                  REGNODE_BM_BITMAP_LEN * CHARBITS,
+                  &cp_list,
+                  TWO_BYTE_UTF8_TO_NATIVE(((struct regnode_bbm *) n)->first_byte,
+                                          UTF_CONTINUATION_MARK));
+    return cp_list;
+}
+
 /*
  - regdump - dump a regexp onto Perl_debug_log in vaguely comprehensible form
  */
@@ -22043,6 +22078,17 @@ Perl_regprop(pTHX_ const regexp *prog, SV *sv, const regnode *o, const regmatch_
         }
 
         put_charclass_bitmap_innards(sv, NULL, cp_list, NULL, NULL, 0, TRUE);
+        Perl_sv_catpvf(aTHX_ sv, "%s]", PL_colors[1]);
+
+        SvREFCNT_dec(cp_list);
+    }
+    else if (k == ANYOFHbbm) {
+        SV * cp_list = get_ANYOFHbbm_contents(o);
+        Perl_sv_catpvf(aTHX_ sv, "[%s", PL_colors[0]);
+
+        Perl_sv_catsv(aTHX_ sv, invlist_contents(cp_list,
+                                      FALSE /* output suitable for catsv */
+                                     ));
         Perl_sv_catpvf(aTHX_ sv, "%s]", PL_colors[1]);
 
         SvREFCNT_dec(cp_list);

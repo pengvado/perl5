@@ -6297,6 +6297,11 @@ PERL_STATIC_INLINE Size_t	S_find_first_differing_byte_pos(const U8 * s1, const U
 #define PERL_ARGS_ASSERT_FIND_FIRST_DIFFERING_BYTE_POS	\
 	assert(s1); assert(s2)
 #endif
+STATIC SV *	S_get_ANYOFHbbm_contents(pTHX_ const regnode * n)
+			__attribute__warn_unused_result__;
+#define PERL_ARGS_ASSERT_GET_ANYOFHBBM_CONTENTS	\
+	assert(n)
+
 STATIC SV *	S_get_ANYOFM_contents(pTHX_ const regnode * n)
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT_GET_ANYOFM_CONTENTS	\
@@ -6379,6 +6384,12 @@ STATIC SV *	S_parse_uniprop_string(pTHX_ const char * const name, Size_t name_le
 STATIC void	S_populate_ANYOF_from_invlist(pTHX_ regnode *node, SV** invlist_ptr);
 #define PERL_ARGS_ASSERT_POPULATE_ANYOF_FROM_INVLIST	\
 	assert(node); assert(invlist_ptr)
+STATIC void	S_populate_bitmap_from_invlist(pTHX_ SV * invlist, const UV adjustment, const U8 * bitmap, const Size_t len);
+#define PERL_ARGS_ASSERT_POPULATE_BITMAP_FROM_INVLIST	\
+	assert(invlist); assert(bitmap)
+STATIC void	S_populate_invlist_from_bitmap(pTHX_ const U8 * bitmap, const Size_t bitmap_len, SV ** invlist, const UV adjustment);
+#define PERL_ARGS_ASSERT_POPULATE_INVLIST_FROM_BITMAP	\
+	assert(bitmap); assert(invlist)
 STATIC void	S_rck_elide_nothing(pTHX_ regnode *node);
 #define PERL_ARGS_ASSERT_RCK_ELIDE_NOTHING	\
 	assert(node)
