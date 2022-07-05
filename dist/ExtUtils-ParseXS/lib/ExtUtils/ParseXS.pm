@@ -8,10 +8,11 @@ use Exporter 'import';
 use File::Basename;
 use File::Spec;
 use Symbol;
+use Data::Dumper; $Data::Dumper::Indent=1;
 
 our $VERSION;
 BEGIN {
-  $VERSION = '3.45';
+  $VERSION = '3.46';
   require ExtUtils::ParseXS::Constants; ExtUtils::ParseXS::Constants->VERSION($VERSION);
   require ExtUtils::ParseXS::CountLines; ExtUtils::ParseXS::CountLines->VERSION($VERSION);
   require ExtUtils::ParseXS::Utilities; ExtUtils::ParseXS::Utilities->VERSION($VERSION);
@@ -257,6 +258,8 @@ EOM
   my $cpp_next_tmp = 'XSubPPtmpAAAA';
  PARAGRAPH:
   while ($self->fetch_para()) {
+print STDERR "UUU\n";;
+print STDERR Dumper $self->{XSStack};
     my $outlist_ref  = [];
     # Print initial preprocessor statements and blank lines
     while (@{ $self->{line} } && $self->{line}->[0] !~ /^[^\#]/) {
@@ -352,6 +355,8 @@ EOM
     if ($Is_VMS) {
       $self->{Full_func_name} = $SymSet->addsym( $self->{Full_func_name} );
     }
+print STDERR "WWW: no. of items on XSStack: ", scalar @{ $self->{XSStack} }, "\n";
+print STDERR Dumper $self->{XSStack};
 
     # Check for duplicate function definition
     for my $tmp (@{ $self->{XSStack} }) {
@@ -879,8 +884,10 @@ EOF
       push(@{ $self->{InitFileCode} },
         "        (void)$self->{newXS}(\"$overload\", XS_$self->{Full_func_name}$self->{file}$self->{proto});\n");
     }
+print STDERR "VVV\n";;
+print STDERR Dumper $self->{XSStack};
   } # END 'PARAGRAPH' 'while' loop
-
+print STDERR "XXX: Got to end of 'while' loop!\n";
   for my $package (keys %{ $self->{Overloaded} }) { # make them findable with fetchmethod
     my $packid = $self->{Overloaded}->{$package};
     print Q(<<"EOF");
@@ -1025,6 +1032,7 @@ EOF
   select($orig_fh);
   untie *PSEUDO_STDOUT if tied *PSEUDO_STDOUT;
   close $self->{FH};
+print STDERR "YYY: Got to end of process_file()\n";
 
   return 1;
 }
