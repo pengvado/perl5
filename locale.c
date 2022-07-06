@@ -798,9 +798,6 @@ S_emulate_setlocale_i(pTHX_ const unsigned int index, const char * locale)
         const char * s = locale;
         const char * e = locale + strlen(locale);
         const char * p = s;
-        const char * category_end;
-        const char * name_start;
-        const char * name_end;
 
         /* If the string that gives what to set doesn't include all categories,
          * the omitted ones get set to "C".  To get this behavior, first set
@@ -818,29 +815,28 @@ S_emulate_setlocale_i(pTHX_ const unsigned int index, const char * locale)
             while (isWORDCHAR(*p)) {
                 p++;
             }
-            category_end = p;
+            const char * category_end = p;
 
-            if (*p++ != '=') {
+            if (*p != '=') {
                 Perl_croak(aTHX_
-                    "panic: %s: %d: Unexpected character in locale name '%02X",
-                    __FILE__, __LINE__, *(p-1));
+                    "panic: %s: %d: Unexpected character in locale category"
+                    " name %.*s\\x%02X", __FILE__, __LINE__,
+                    (int) (p - locale), locale,  *p);
             }
+            p++;
 
-            /* Parse through the locale name */
-            name_start = p;
-            while (p < e && *p != ';') {
-                if (! isGRAPH(*p)) {
-                    Perl_croak(aTHX_
-                        "panic: %s: %d: Unexpected character in locale name '%02X",
-                        __FILE__, __LINE__, *(p-1));
-                }
+            /* The locale name is everything up to the next ';', or end of
+             * string */
+            const char * name_start = p;
+            const char * name_end;
+            p = strchr(p, ';');
+            if (p) {    /* Space past the semi-colon */
+                name_end = p;
                 p++;
             }
-            name_end = p;
-
-            /* Space past the semi-colon */
-            if (p < e) {
-                p++;
+            else {
+                name_end = e;
+                p = e;
             }
 
             /* Find the index of the category name in our lists */
@@ -867,8 +863,7 @@ S_emulate_setlocale_i(pTHX_ const unsigned int index, const char * locale)
                 assert(category == LC_ALL);
                 individ_locale = Perl_form(aTHX_ "%.*s",
                                     (int) (name_end - name_start), name_start);
-                if (! emulate_setlocale_i(i, individ_locale))
-                {
+                if (! emulate_setlocale_i(i, individ_locale)) {
                     return NULL;
                 }
             }
