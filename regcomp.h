@@ -112,6 +112,42 @@ typedef struct regexp_internal {
 
 /* this is where the old regcomp.h started */
 
+
+/* define the various regnode structures. These all should be a multiple
+ * of 32 bits large, and they should by and large correspond with each other
+ * in terms of naming, etc. Things can and will break in subtle ways if you
+ * change things without care. If you look at regexp.h you will see it
+ * contains this:
+ *
+ * struct regnode {
+ *   U8  flags;
+ *   U8  type;
+ *   U16 next_off;
+ * };
+ *
+ * This structure is the base unit of elements in the regexp program. When
+ * we increment our way through the program we increment by the size of this
+ * structure, and in all cases where regnode sizing is considered it is in
+ * units of this structure.
+ *
+ * This implies that no regnode style structure should contain 64
+ * aligned members. Since the base regnode is 32 bits any member might
+ * not be 64 bit aligned no matter how you might try to pad out the
+ * struct itself (the regnode_ssc is special in this regard as it is
+ * never used in a program directly). If you want to store 64 bit
+ * members you need to store the high and low 32 bits independently. The
+ * ARGp() and ARGp_SET() macros provide an example solution. Note they
+ * deal with a slightly more complicated problem that pointers may be 32
+ * bits or 64 bits depending on platform. They are the pattern to follow
+ * if you want to put a pointer in the regnode, or any 64 bit value for
+ * that matter.
+
+ * Ideally we would put pointers in the "data" part of the regexp
+ * structure and put the index for the data in the regnode instead so that
+ * the pointers can be freed or cloned properly, but if you must ARGp shows
+ * how to do it.
+ */
+
 struct regnode_string {
     U8	str_len;
     U8  type;
@@ -150,7 +186,12 @@ struct regnode_p {
     U8	flags;
     U8  type;
     U16 next_off;
-    SV * arg1;
+#if PTRSIZE == 8
+    U32 ptr_high;
+    U32 ptr_low;
+#else
+    SV *ptr;
+#endif
 };
 
 /* Similar to a regnode_1 but with an extra signed argument */
@@ -226,6 +267,8 @@ struct regnode_charclass_posixl {
  * allocated in terms of multiples of a single-argument regnode.  SSC nodes can
  * have a pointer field because there is no alignment issue, and because it is
  * set to NULL after construction, before any cloning of the pattern */
+/* NOTE - this "regnode" is not used in the program itself, so you do not need
+ * to worry about member alignment issues here */
 struct regnode_ssc {
     U8	flags;                      /* ANYOF_MATCHES_POSIXL bit must go here */
     U8  type;
@@ -282,13 +325,25 @@ struct regnode_ssc {
 #undef ARG2
 
 #define ARG(p) ARG_VALUE(ARG_LOC(p))
-#define ARGp(p) ARG_VALUE(ARGp_LOC(p))
+#if PTRSIZE == 8
+#define ARGp(p) (SV*)(((UV)ARG_VALUE(ARGp_PTR_HIGH_LOC(p))) << 32 | ((UV)(ARG_VALUE(ARGp_PTR_LOW_LOC(p)))))
+#else
+#define ARGp(p) ARG_VALUE(ARGp_PTR_LOC(p))
+#endif
 #define ARG1(p) ARG_VALUE(ARG1_LOC(p))
 #define ARG2(p) ARG_VALUE(ARG2_LOC(p))
 #define ARG2L(p) ARG_VALUE(ARG2L_LOC(p))
 
 #define ARG_SET(p, val) ARG__SET(ARG_LOC(p), (val))
-#define ARGp_SET(p, val) ARG__SET(ARGp_LOC(p), (val))
+#if PTRSIZE == 8
+#define ARGp_SET(p, val) STMT_START {                       \
+    UV MY_val = PTR2UV(val);                                \
+    ARG__SET(ARGp_PTR_HIGH_LOC(p), (MY_val>>32));           \
+    ARG__SET(ARGp_PTR_LOW_LOC(p), (MY_val & 0xFFFFFFFF));   \
+} STMT_END
+#else
+#define ARGp_SET(p,val) ARG__SET(ARGp_PTR_LOC(p))
+#endif
 #define ARG1_SET(p, val) ARG__SET(ARG1_LOC(p), (val))
 #define ARG2_SET(p, val) ARG__SET(ARG2_LOC(p), (val))
 #define ARG2L_SET(p, val) ARG__SET(ARG2L_LOC(p), (val))
@@ -377,7 +432,11 @@ struct regnode_ssc {
 
 #define	NODE_ALIGN(node)
 #define	ARG_LOC(p)	(((struct regnode_1 *)p)->arg1)
-#define ARGp_LOC(p)	(((struct regnode_p *)p)->arg1)
+
+#define ARGp_PTR_HIGH_LOC(p)        (((struct regnode_p *)p)->ptr_high)
+#define ARGp_PTR_LOW_LOC(p)        (((struct regnode_p *)p)->ptr_low)
+#define ARGp_PTR_LOC(p)                (((struct regnode_p *)p)->ptr)
+
 #define	ARG1_LOC(p)	(((struct regnode_2 *)p)->arg1)
 #define	ARG2_LOC(p)	(((struct regnode_2 *)p)->arg2)
 #define ARG2L_LOC(p)	(((struct regnode_2L *)p)->arg2)
