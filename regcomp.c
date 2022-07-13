@@ -6820,18 +6820,52 @@ S_study_chunk(pTHX_
     assert(!frame);
     DEBUG_STUDYDATA("pre-fin", data, depth, is_inf, min, stopmin, delta);
 
+    /* is this pattern infinite? Eg, consider /(a|b+)/ */
+    if (is_inf_internal)
+        delta = OPTIMIZE_INFTY;
+
+    /* deal with (*ACCEPT), Eg, consider /(foo(*ACCEPT)|bop)bar/ */
     if (min > stopmin) {
-        /* stopmin might be shorter than min if we saw an (*ACCEPT). If
-        this is the case then it means this pattern is variable length
-        and we need to ensure that the delta accounts for it. delta
-        represents the difference between min length and max length for
-        this part of the pattern. */
-        delta += min - stopmin;
+        /*
+        min represents the minimum length string we can match, and delta
+        represents the difference between the minimum length and maximum
+        length, if the pattern matches an infinitely long string then we
+        use the special delta value of OPTIMIZE_INFTY to represent it.
+        stopmin is a special case which represents the minimum length we
+        can match without having to match the entire pattern.
+
+        In particular stopmin might be smaller than min if we saw an
+        (*ACCEPT). If this is the case then it means this pattern is
+        variable length and we need to ensure that the delta accounts
+        for it properly. Consider that in a pattern /AB/ normally the
+        min length it can match is computed as min(A)+min(B). But (*ACCEPT)
+        means that it might be something else, not even necesarily
+        min(A) at all. Consider
+
+             A= /(foo(*ACCEPT)|x+)/
+             B= /whop/
+             AB= /(foo(*ACCEPT)|x+)bar/
+
+        The min for A is 1 for "X" and the delta for A is OPTIMIZE_INFTY
+        for "xxxxx...". The min for B is 4 for "whop", and the delta is 0.
+        The min for AB is 3 for "foo", and the delta is OPTIMIZE_INFTY for
+        "xxxxx...bar".
+
+        Another example is /(foo(*ACCEPT)|x+)bar/ where we would have a
+        delta of OPTIMIZE_INFTY, a stopmin of 3, and a min of 4. This
+        should result in a delta of OPTIMIZE_INFTY and a min of 3.
+
+        In something like /(dude(*ACCEPT)|irk)x{10,20}/ we would have a
+        delta of 10, a stopmin of 4 and a min of 13. This should result
+        in a delta of 20 and a min of 3.
+        */
+        if (OPTIMIZE_INFTY - delta >= min - stopmin)
+            delta += min - stopmin;
         min = stopmin;
     }
 
     *scanp = scan;
-    *deltap = is_inf_internal ? OPTIMIZE_INFTY : delta;
+    *deltap = delta;
 
     if (flags & SCF_DO_SUBSTR && is_inf)
         data->pos_delta = OPTIMIZE_INFTY - data->pos_min;
